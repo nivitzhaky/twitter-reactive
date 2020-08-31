@@ -8,10 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import scala.App;
 import twitter4j.TwitterException;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import static com.handson.twitter.config.KafkaEmbeddedConfig.TEST_TOPIC;
 import static com.handson.twitter.kafka.KafkaListener.FINISH_PROCESSING;
@@ -19,6 +22,7 @@ import static com.handson.twitter.kafka.KafkaListener.FINISH_PROCESSING;
 
 @RestController
 public class AppController {
+    public static final int STOP_DELAY = 120000;
     AppTwitterStream twitter;
 
     @Autowired
@@ -35,7 +39,7 @@ public class AppController {
     public  @ResponseBody Flux<String> twitter(@RequestParam String keyword, @RequestParam String mode,
                                                @RequestParam Integer timeWindow, @RequestParam boolean sentiment) throws TwitterException {
         AppSentiment analyzer = new AppSentiment();
-
+        scheduleStreamStop();
         if (k != null) k.stopListen();
         AppTwitterStream o =  new AppTwitterStream();
         k = new KafkaListener();
@@ -64,6 +68,12 @@ public class AppController {
         }
     }
 
+    private void scheduleStreamStop() {
+        Timer t = new Timer();
+        MyTask stop = new MyTask(this);
+        t.schedule(stop, STOP_DELAY);
+    }
+
     @RequestMapping(path = "/stop", method = RequestMethod.GET)
     public Mono<String> stopTwitter(){
         twitter.shutdown();
@@ -87,5 +97,14 @@ public class AppController {
 
 
 
+    }
+    class MyTask extends TimerTask {
+        AppController controller;
+        public MyTask(AppController controller) {
+            this.controller = controller;
+        }
+        public void run() {
+            controller.stopTwitter();
+        }
     }
 }
